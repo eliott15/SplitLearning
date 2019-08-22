@@ -1,4 +1,4 @@
-# SplitLearning
+# Split Learning
 
 ## Installation
 The code uses PySyft framework, which needs to be installed and slightly modified in order to be able to use GPUs. To install the right version, run the following commands: 
