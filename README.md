@@ -1,7 +1,7 @@
 # Split Learning
 
 ## Installation
-The code uses PySyft framework, which needs to be installed and slightly modified in order to be able to use GPUs. To install the right version, run the following commands: 
+The code uses PySyft framework, which needs to be installed and slightly modified in order to be able to use GPUs. PySyft requires Python >= 3.6.  To install the right version, run the following commands: 
 ```
 $ git clone https://github.com/OpenMined/PySyft.git 
 $ cd PySyft
