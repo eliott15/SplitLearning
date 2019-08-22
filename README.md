@@ -1,5 +1,20 @@
 # SplitLearning
 
+## Installation
+The code uses PySyft framework, which needs to be installed and slightly modified in order to be able to use GPUs. To install the right version, run the following commands: 
+```
+$ git clone https://github.com/OpenMined/PySyft.git 
+$ cd PySyft
+$ pip install -r requirements.txt
+$ cd .. 
+$ mv native.py PySyft/syft/frameworks/torch/tensors/interpreters/ 
+$ cd PySyft
+$ python3 setup.py install 
+
+```
+
+
+## Running experiments
 To run the experiments, run the command: 
 ```
 $ python3 experience_name num_workers
