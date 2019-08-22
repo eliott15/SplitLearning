@@ -10,7 +10,6 @@ $ cd ..
 $ mv native.py PySyft/syft/frameworks/torch/tensors/interpreters/ 
 $ cd PySyft
 $ python3 setup.py install 
-
 ```
 
 
