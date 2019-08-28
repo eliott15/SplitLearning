@@ -125,8 +125,8 @@ class Arguments():
     def __init__(self, no_cuda):
         self.batch_size = 64
         self.test_batch_size = 1000
-        self.epochs = 10
-        self.lr = 0.001
+        self.epochs = 30
+        self.lr = 0.01
         self.momentum = 0.5
         self.no_cuda = no_cuda
         self.seed = 1
@@ -141,6 +141,7 @@ def model_size(model):
         size += p.element_size()*p.nelement()
     return size
 
+criterion = nn.CrossEntropyLoss()
 def train(args, model, device, federated_train_loader, optimizer, epoch, clients_mem):
     model.train()
     for batch_idx, (data, target) in enumerate(federated_train_loader): # <-- now it is a distributed dataset
@@ -153,7 +154,8 @@ def train(args, model, device, federated_train_loader, optimizer, epoch, clients
 
         optimizer.zero_grad()
         output = model(data)
-        loss = F.nll_loss(output, target)
+        #loss = F.nll_loss(output, target)
+        loss = criterion(output,target)
         loss.backward()
         optimizer.step()
 
@@ -180,7 +182,8 @@ def test(args, model, device, test_loader):
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
             output = model(data)
-            test_loss += F.nll_loss(output, target, reduction='sum').item() # sum up batch loss
+            #test_loss += F.nll_loss(output, target, reduction='sum').item() # sum up batch loss
+            test_loss += criterion(output,target).item()
             pred = output.argmax(1, keepdim=True) # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
 
