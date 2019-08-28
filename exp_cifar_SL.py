@@ -13,10 +13,10 @@ import math
 num_workers = int(sys.argv[-1])
 class Arguments():
     def __init__(self, no_cuda):
-        self.batch_size = 64
+        self.batch_size = 256
         self.test_batch_size = 1000
-        self.epochs = 10
-        self.lr = 0.001
+        self.epochs = 30
+        self.lr = 0.05
         self.momentum = 0.5
         self.no_cuda = no_cuda
         self.seed = 1
@@ -48,13 +48,13 @@ class VGG(nn.Module):
         super(VGG, self).__init__()
         self.features = features
         self.classifier = nn.Sequential(
-            nn.Linear(512, 512),
+            nn.Linear(512, 4096),
             nn.ReLU(True),
             nn.Dropout(),
-            nn.Linear(512, 512),
+            nn.Linear(4096, 4096),
             nn.ReLU(True),
             nn.Dropout(),
-            nn.Linear(512, num_classes)
+            nn.Linear(4096, num_classes)
 
         )
         if init_weights:
@@ -227,8 +227,7 @@ def train(args, model, device, federated_train_loader, optimizer, epoch, models,
         # 4) make prediction with second part of the model (server location)
         pred = model(inp)
         # 5) calculate how much we missed
-        #loss = F.nll_loss(pred, target)
-        print(pred)
+        #loss = F.nll_loss(pred, target))
         loss = criterion(pred,target)
         loss.backward()
 
@@ -243,12 +242,14 @@ def train(args, model, device, federated_train_loader, optimizer, epoch, models,
         #gradient = gradient.view(pred_c.shape)
         pred_c.backward(gradient)
 
-
         if batch_idx % args.log_interval == 0:
+            #prediction = pred.argmax(1, keepdim=True)
             #loss = loss.get() # <-- NEW: get the loss back
+            #print(data.grad.get())
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * args.batch_size, len(federated_train_loader) * args.batch_size,
                 100. * batch_idx / len(federated_train_loader), loss.item()))
+            #print(prediction)
 
 
 def test(args, model, device, test_loader, models):
@@ -267,7 +268,8 @@ def test(args, model, device, test_loader, models):
                 output += model(M[i](data))
             output = output/n
             #output2 = model(M2(data))
-            test_loss += F.nll_loss(output, target, reduction='sum').item() # sum up batch loss
+            #test_loss += F.nll_loss(output, target, reduction='sum').item() # sum up batch loss
+            test_loss += criterion(output, target).item()
             pred = output.argmax(1, keepdim=True) # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
 
@@ -319,24 +321,23 @@ def experiment(num_workers,no_cuda):
 
 
     #creating the models for each client
-    models,optimizers = [], []
+    models, optimizers = [], []
     #model1,model2= vgg11_bn_SL()
     #print(device)
     for i in range(num_workers):
         #print(i)
         models.append(vgg11_SL()[0].to(device))
         models[i] = models[i].send(clients[i])
-        optimizers.append(optim.SGD(params=models[i].parameters(),lr=args.lr))
-
+        optimizers.append(optim.SGD(params=models[i].parameters(),lr=args.lr,momentum=0.9))
 
 
     start = time.time()
     #%%time
     model = vgg11_SL()[1].to(device)
-    optimizer = optim.SGD(model.parameters(), lr=args.lr) # TODO momentum is not supported at the moment
+    optimizer = optim.SGD(model.parameters(), lr=args.lr,momentum=0.9) # TODO momentum is not supported at the moment
 
     for epoch in range(1, args.epochs + 1):
-        train(args, model, device, federated_train_loader, optimizer, epoch, models, optimizers,clients_mem)
+        train(args, model, device, federated_train_loader, optimizer, epoch, models, optimizers, clients_mem)
         test(args, model, device, test_loader, models)
 
     if (args.save_model):
@@ -344,7 +345,7 @@ def experiment(num_workers,no_cuda):
 
     end = time.time()
     print(end - start)
-    print("Memory exchanged : ",clients_mem)
+    print("Memory exchanged : ", clients_mem)
     return clients_mem
 
 
