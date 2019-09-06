@@ -19,4 +19,10 @@ To run the experiments, run the command:
 $ python3 experience_name num_workers
 ```
 where num_workers is the number of clients/data owners we want in the experiment. 
-It prints the time it took to train the model, and the memory exchanged by each worker. 
+This script will therefore first create num_workers clients, split into num_workers parts the dataset (CIFAR if "_cifar" extension, else MNIST). These parts are distributed to the clients. 
+Then the model is trained according to the selected method:
+fedl: Vanilla Federated Learning
+favg: Federated Averaging
+SL: Split Learning
+
+It prints out the time it took to train the model, and the memory exchanged by each worker. 
