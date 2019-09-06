@@ -14,7 +14,7 @@ num_workers = int(sys.argv[-1])
 
 class Arguments():
     def __init__(self, no_cuda):
-        self.batch_size = 256
+        self.batch_size = 64
         self.test_batch_size = 1000
         self.epochs = 10
         self.lr = 0.01
@@ -45,6 +45,7 @@ class Net(nn.Module):
         x = self.fc2(x)
         return F.log_softmax(x, dim=1)
 
+# returns the size of the model
 def model_size(model):
     size = 0
     for p in model.parameters():
@@ -74,7 +75,6 @@ def train_on_batches(worker, batches, model_in, device, lr,epoch,clients_mem,arg
 
 
     loss_local = False
-    #D = {"alice":0,"bob":1,"charlie":2}
 
     for batch_idx, (data, target) in enumerate(batches):
         loss_local = False
@@ -85,7 +85,7 @@ def train_on_batches(worker, batches, model_in, device, lr,epoch,clients_mem,arg
         loss.backward()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
-            loss = loss.get()  # <-- NEW: get the loss back
+            loss = loss.get()
             loss_local = True
             print(
                 "Epoch {} Train Worker {}: [{}/{} ({:.0f}%)]\tLoss: {:.6f}".format(
@@ -99,8 +99,8 @@ def train_on_batches(worker, batches, model_in, device, lr,epoch,clients_mem,arg
             )
 
     if not loss_local:
-        loss = loss.get()  # <-- NEW: get the loss back
-    model.get()  # <-- NEW: get the model back
+        loss = loss.get()
+    model.get()
     clients_mem[i] += model_size(model)
     return model, loss
 
@@ -116,10 +116,8 @@ def get_next_batches(fdataloader: sy.FederatedDataLoader, nr_batches: int):
         Dict[syft.workers.BaseWorker, List[batches]]
     """
     batches = {}
-    #print("workers id:",fdataloader.workers)
     for worker_id in fdataloader.workers:
         worker = fdataloader.federated_dataset.datasets[worker_id].location
-        #print("worker",worker)
         batches[worker] = []
     try:
         for i in range(nr_batches):
@@ -139,7 +137,7 @@ def train(args,model, device, federated_train_loader, lr, federate_after_n_batch
     models = {}
     loss_values = {}
 
-    iter(federated_train_loader)  # initialize iterators
+    iter(federated_train_loader)
     batches = get_next_batches(federated_train_loader, nr_batches)
     counter = 0
 
@@ -226,21 +224,10 @@ def experiment(num_workers,no_cuda):
       batch_size=args.test_batch_size, shuffle=True, **kwargs)
 
 
-    #creating the models for each client
-    #models,optimizers = [], []
-    #print(device)
-    #for i in range(num_workers):
-        #print(i)
-    #    models.append(Net1().to(device))
-    #    models[i] = models[i].send(clients[i])
-    #    optimizers.append(optim.SGD(params=models[i].parameters(),lr=0.1))
-
-
-
     start = time.time()
     #%%time
     model = Net().to(device)
-    optimizer = optim.SGD(model.parameters(), lr=args.lr) # TODO momentum is not supported at the moment
+    optimizer = optim.SGD(model.parameters(), lr=args.lr) 
 
     for epoch in range(1, args.epochs + 1):
         model = train(args, model, device, federated_train_loader, args.lr, args.federate_after_n_batches, epoch, clients_mem)

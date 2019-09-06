@@ -10,6 +10,8 @@ import torch.utils.model_zoo as model_zoo
 import math
 
 num_workers = int(sys.argv[-1])
+
+# VGG implementation
 __all__ = [
     'VGG', 'vgg11', 'vgg11_bn', 'vgg13', 'vgg13_bn', 'vgg16', 'vgg16_bn',
     'vgg19_bn', 'vgg19',
@@ -144,31 +146,28 @@ def model_size(model):
 criterion = nn.CrossEntropyLoss()
 def train(args, model, device, federated_train_loader, optimizer, epoch, clients_mem):
     model.train()
-    for batch_idx, (data, target) in enumerate(federated_train_loader): # <-- now it is a distributed dataset
+    for batch_idx, (data, target) in enumerate(federated_train_loader):
         start = time.time()
-        model.send(data.location) # <-- NEW: send the model to the right location
+        model.send(data.location)
         end = time.time()
-        print("send",end-start)
         data, target = data.to(device), target.to(device)
         i = int(data.location.id.split()[-1])
 
         optimizer.zero_grad()
         output = model(data)
-        #loss = F.nll_loss(output, target)
         loss = criterion(output,target)
         loss.backward()
         optimizer.step()
 
         start = time.time()
-        model.get() # <-- NEW: get the model back
+        model.get()
 
         end = time.time()
-        print("get",end-start)
 
         clients_mem[i] += 2*model_size(model)
 
         if batch_idx % args.log_interval == 0:
-            loss = loss.get() # <-- NEW: get the loss back
+            loss = loss.get()
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * args.batch_size, len(federated_train_loader) * args.batch_size,
                 100. * batch_idx / len(federated_train_loader), loss.item()))
@@ -182,9 +181,8 @@ def test(args, model, device, test_loader):
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
             output = model(data)
-            #test_loss += F.nll_loss(output, target, reduction='sum').item() # sum up batch loss
             test_loss += criterion(output,target).item()
-            pred = output.argmax(1, keepdim=True) # get the index of the max log-probability
+            pred = output.argmax(1, keepdim=True)
             correct += pred.eq(target.view_as(pred)).sum().item()
 
     test_loss /= len(test_loader.dataset)
@@ -209,7 +207,6 @@ def experiment(num_workers,no_cuda):
 
     use_cuda = not args.no_cuda and torch.cuda.is_available()
     if use_cuda:
-    # TODO Quickhack. Actually need to fix the problem moving the model to CUDA\n",
         torch.set_default_tensor_type(torch.cuda.FloatTensor)
 
     torch.manual_seed(args.seed)
@@ -222,10 +219,10 @@ def experiment(num_workers,no_cuda):
     [transforms.ToTensor(),
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
-    federated_train_loader = sy.FederatedDataLoader( # <-- this is now a FederatedDataLoader
+    federated_train_loader = sy.FederatedDataLoader(
       datasets.CIFAR10('../data', train=True, download=True,
                      transform=transform)
-      .federate(clients), # <-- NEW: we distribute the dataset across all the workers, it's now a FederatedDataset
+      .federate(clients),
       batch_size=args.batch_size, shuffle=True, **kwargs)
 
     test_loader = torch.utils.data.DataLoader(
@@ -233,26 +230,14 @@ def experiment(num_workers,no_cuda):
       batch_size=args.test_batch_size, shuffle=True, **kwargs)
 
 
-    #creating the models for each client
-    #models,optimizers = [], []
-    #print(device)
-    #for i in range(num_workers):
-        #print(i)
-    #    models.append(Net1().to(device))
-    #    models[i] = models[i].send(clients[i])
-    #    optimizers.append(optim.SGD(params=models[i].parameters(),lr=0.1))
-
-
-
     start = time.time()
-    #%%time
     model = vgg11().to(device)
-    optimizer = optim.SGD(model.parameters(), lr=args.lr) # TODO momentum is not supported at the moment
-
+    optimizer = optim.SGD(model.parameters(), lr=args.lr) 
     for epoch in range(1, args.epochs + 1):
         train(args, model, device, federated_train_loader, optimizer, epoch, clients_mem)
         test(args, model, device, test_loader)
-
+        t = time.time()
+        print(t-start)
     if (args.save_model):
         torch.save(model.state_dict(), "mnist_cnn.pt")
 

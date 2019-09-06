@@ -64,7 +64,6 @@ class VGG(nn.Module):
         x = self.features(x)
         x = x.view(x.size(0), -1)
         x = self.classifier(x)
-        #x = F.log_softmax(x, dim=1)
         return x
 
     def _initialize_weights(self):
@@ -97,7 +96,7 @@ def make_layers(cfg, batch_norm=False):
             in_channels = v
     return nn.Sequential(*layers)
 
-
+# Adapted version for Split Learning
 def make_layers_SL(cfg, batch_norm=False):
     layers1,layers2 = [],[]
     in_channels = 3
@@ -165,6 +164,7 @@ def vgg11_bn_SL(pretrained=False, **kwargs):
     #    model.load_state_dict(model_zoo.load_url(model_urls['vgg11_bn']))
     return model1, model2
 
+# VGG11 version for split learning, returns two models
 def vgg11_SL(pretrained=False, **kwargs):
     """VGG 11-layer model (configuration "A") with batch normalization
 
@@ -197,8 +197,7 @@ def vgg16_SL(pretrained=False, **kwargs):
 criterion = nn.CrossEntropyLoss()
 def train(args, model, device, federated_train_loader, optimizer, epoch, models, optimizers, clients_mem):
     model.train()
-    for batch_idx, (data, targs) in enumerate(federated_train_loader): # <-- now it is a distributed dataset
-        #IF ON DATA LOCATION TO GET THE RIGHT MODEL AND OPTIMIZER
+    for batch_idx, (data, targs) in enumerate(federated_train_loader):
         i = int(data.location.id.split()[-1])
         mod_c,opt_c = models[i], optimizers[i]
 
@@ -215,7 +214,6 @@ def train(args, model, device, federated_train_loader, optimizer, epoch, models,
         data, target = data.to(device), target.to(device)
 
         # 2) make a prediction until cut layer (client location)
-        #print("data shape:",data.shape)
         pred_c = mod_c(data)
         copy = pred_c.copy()
 
@@ -227,29 +225,22 @@ def train(args, model, device, federated_train_loader, optimizer, epoch, models,
         # 4) make prediction with second part of the model (server location)
         pred = model(inp)
         # 5) calculate how much we missed
-        #loss = F.nll_loss(pred, target))
+
         loss = criterion(pred,target)
         loss.backward()
 
         gradient = inp.grad
 
         clients_mem[i] += (gradient.element_size()*gradient.nelement()) + (inp.element_size() * inp.nelement())
-
+        print((gradient.element_size()*gradient.nelement()) + (inp.element_size() * inp.nelement()))
 
         gradient = gradient.send(data.location)
-        #print("grad shape:",gradient.shape)
-        #print("pred_c shape:", pred_c.shape)
-        #gradient = gradient.view(pred_c.shape)
         pred_c.backward(gradient)
 
         if batch_idx % args.log_interval == 0:
-            #prediction = pred.argmax(1, keepdim=True)
-            #loss = loss.get() # <-- NEW: get the loss back
-            #print(data.grad.get())
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * args.batch_size, len(federated_train_loader) * args.batch_size,
                 100. * batch_idx / len(federated_train_loader), loss.item()))
-            #print(prediction)
 
 
 def test(args, model, device, test_loader, models):
@@ -267,10 +258,8 @@ def test(args, model, device, test_loader, models):
             for i in range(n):
                 output += model(M[i](data))
             output = output/n
-            #output2 = model(M2(data))
-            #test_loss += F.nll_loss(output, target, reduction='sum').item() # sum up batch loss
             test_loss += criterion(output, target).item()
-            pred = output.argmax(1, keepdim=True) # get the index of the max log-probability
+            pred = output.argmax(1, keepdim=True)
             correct += pred.eq(target.view_as(pred)).sum().item()
 
     test_loss /= len(test_loader.dataset)
@@ -322,8 +311,7 @@ def experiment(num_workers,no_cuda):
 
     #creating the models for each client
     models, optimizers = [], []
-    #model1,model2= vgg11_bn_SL()
-    #print(device)
+
     for i in range(num_workers):
         #print(i)
         models.append(vgg11_SL()[0].to(device))
@@ -332,7 +320,6 @@ def experiment(num_workers,no_cuda):
 
 
     start = time.time()
-    #%%time
     model = vgg11_SL()[1].to(device)
     optimizer = optim.SGD(model.parameters(), lr=args.lr,momentum=0.9) # TODO momentum is not supported at the moment
 

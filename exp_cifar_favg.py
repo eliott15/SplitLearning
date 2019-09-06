@@ -126,11 +126,11 @@ def vgg11_bn(pretrained=False, **kwargs):
 
 class Arguments():
     def __init__(self, no_cuda):
-        self.batch_size = 64
+        self.batch_size = 256
         self.test_batch_size = 1000
         self.epochs = 30
-        self.lr = 0.01
-        self.momentum = 0.5
+        self.lr = 0.05
+        self.momentum = 0.9
         self.no_cuda = no_cuda
         self.seed = 1
         self.log_interval = 30
@@ -160,9 +160,10 @@ def train_on_batches(worker, batches, model_in, device, lr,epoch,clients_mem,arg
         model, loss: obtained model and loss after training
     """
     model = model_in.copy()
-    optimizer = optim.SGD(model.parameters(), lr=lr)  # TODO momentum is not supported at the moment
+    optimizer = optim.SGD(model.parameters(), lr=lr)
     i = int(worker.id.split()[-1])
     loss_local = False
+    print(model_size(model))
     clients_mem[i] += model_size(model)
     model.train()
     model.send(worker)
@@ -176,7 +177,7 @@ def train_on_batches(worker, batches, model_in, device, lr,epoch,clients_mem,arg
         loss.backward()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
-            loss = loss.get()  # <-- NEW: get the loss back
+            loss = loss.get()
             loss_local = True
             print(
                 "Epoch {} Train Worker {}: [{}/{} ({:.0f}%)]\tLoss: {:.6f}".format(
@@ -190,8 +191,8 @@ def train_on_batches(worker, batches, model_in, device, lr,epoch,clients_mem,arg
             )
 
     if not loss_local:
-        loss = loss.get()  # <-- NEW: get the loss back
-    model.get()  # <-- NEW: get the model back
+        loss = loss.get()
+    model.get()
     clients_mem[i] += model_size(model)
     return model, loss
 
@@ -207,10 +208,8 @@ def get_next_batches(fdataloader: sy.FederatedDataLoader, nr_batches: int):
         Dict[syft.workers.BaseWorker, List[batches]]
     """
     batches = {}
-    #print("workers id:",fdataloader.workers)
     for worker_id in fdataloader.workers:
         worker = fdataloader.federated_dataset.datasets[worker_id].location
-        #print("worker",worker)
         batches[worker] = []
     try:
         for i in range(nr_batches):
@@ -268,9 +267,8 @@ def test(args, model, device, test_loader):
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
             output = model(data)
-            #test_loss += F.nll_loss(output, target, reduction='sum').item() # sum up batch loss
-            test_loss += criterion(output,target).item()
-            pred = output.argmax(1, keepdim=True) # get the index of the max log-probability
+
+            pred = output.argmax(1, keepdim=True)
             correct += pred.eq(target.view_as(pred)).sum().item()
 
     test_loss /= len(test_loader.dataset)
@@ -295,7 +293,6 @@ def experiment(num_workers,no_cuda):
 
     use_cuda = not args.no_cuda and torch.cuda.is_available()
     if use_cuda:
-    # TODO Quickhack. Actually need to fix the problem moving the model to CUDA\n",
         torch.set_default_tensor_type(torch.cuda.FloatTensor)
 
     torch.manual_seed(args.seed)
@@ -308,33 +305,19 @@ def experiment(num_workers,no_cuda):
     [transforms.ToTensor(),
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
-    federated_train_loader = sy.FederatedDataLoader( # <-- this is now a FederatedDataLoader
+    federated_train_loader = sy.FederatedDataLoader(
       datasets.CIFAR10('../data', train=True, download=True,
                      transform=transform)
-      .federate(clients), # <-- NEW: we distribute the dataset across all the workers, it's now a FederatedDataset
+      .federate(clients),
       batch_size=args.batch_size, shuffle=True,iter_per_worker=True, **kwargs)
 
     test_loader = torch.utils.data.DataLoader(
       datasets.CIFAR10('../data', train=False, transform=transform),
       batch_size=args.test_batch_size, shuffle=True, **kwargs)
 
-
-    #creating the models for each client
-    #models,optimizers = [], []
-    #print(device)
-    #for i in range(num_workers):
-        #print(i)
-    #    models.append(Net1().to(device))
-    #    models[i] = models[i].send(clients[i])
-    #    optimizers.append(optim.SGD(params=models[i].parameters(),lr=0.1))
-
-
-
     start = time.time()
-    #%%time
     model = vgg11().to(device)
-    optimizer = optim.SGD(model.parameters(), lr=args.lr) # TODO momentum is not supported at the moment
-
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum) 
     for epoch in range(1, args.epochs + 1):
         model = train(args, model, device, federated_train_loader, args.lr,args.federate_after_n_batches ,epoch, clients_mem)
         test(args, model, device, test_loader)

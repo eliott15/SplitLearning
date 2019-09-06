@@ -9,9 +9,10 @@ import time
 
 num_workers = int(sys.argv[-1])
 
+# Parameters for the training
 class Arguments():
     def __init__(self, no_cuda):
-        self.batch_size = 64
+        self.batch_size = 256
         self.test_batch_size = 1000
         self.epochs = 10
         self.lr = 0.01
@@ -41,6 +42,7 @@ class Net(nn.Module):
         x = self.fc2(x)
         return F.log_softmax(x, dim=1)
 
+# Returns the size of the current model
 def model_size(model):
     size = 0
     for p in model.parameters():
@@ -49,9 +51,12 @@ def model_size(model):
 
 def train(args, model, device, federated_train_loader, optimizer, epoch, clients_mem):
     model.train()
-    for batch_idx, (data, target) in enumerate(federated_train_loader): # <-- now it is a distributed dataset
-        model.send(data.location) # <-- NEW: send the model to the right location
+    #distributed dataset
+    for batch_idx, (data, target) in enumerate(federated_train_loader):
+        send the model to the right location
+        model.send(data.location)
         data, target = data.to(device), target.to(device)
+        # associate the worker with the right number
         i = int(data.location.id.split()[-1])
 
         optimizer.zero_grad()
@@ -59,7 +64,10 @@ def train(args, model, device, federated_train_loader, optimizer, epoch, clients
         loss = F.nll_loss(output, target)
         loss.backward()
         optimizer.step()
-        model.get() # <-- NEW: get the model back
+
+        #send the model back
+        model.get()
+        # add twice the size of the model: back and forth
         clients_mem[i] += 2*model_size(model)
         if batch_idx % args.log_interval == 0:
             loss = loss.get() # <-- NEW: get the loss back
@@ -102,7 +110,6 @@ def experiment(num_workers,no_cuda):
 
     use_cuda = not args.no_cuda and torch.cuda.is_available()
     if use_cuda:
-    # TODO Quickhack. Actually need to fix the problem moving the model to CUDA\n",
         torch.set_default_tensor_type(torch.cuda.FloatTensor)
 
     torch.manual_seed(args.seed)
@@ -112,13 +119,13 @@ def experiment(num_workers,no_cuda):
 
 
     # Federated data loader
-    federated_train_loader = sy.FederatedDataLoader( # <-- this is now a FederatedDataLoader
+    federated_train_loader = sy.FederatedDataLoader(
       datasets.MNIST('../data', train=True, download=True,
                      transform=transforms.Compose([
                          transforms.ToTensor(),
                          transforms.Normalize((0.1307,), (0.3081,))
                      ]))
-      .federate(clients), # <-- NEW: we distribute the dataset across all the workers, it's now a FederatedDataset
+      .federate(clients),
       batch_size=args.batch_size, shuffle=True, **kwargs)
 
     test_loader = torch.utils.data.DataLoader(
@@ -129,21 +136,11 @@ def experiment(num_workers,no_cuda):
       batch_size=args.test_batch_size, shuffle=True, **kwargs)
 
 
-    #creating the models for each client
-    #models,optimizers = [], []
-    #print(device)
-    #for i in range(num_workers):
-        #print(i)
-    #    models.append(Net1().to(device))
-    #    models[i] = models[i].send(clients[i])
-    #    optimizers.append(optim.SGD(params=models[i].parameters(),lr=0.1))
-
-
-
+    # Measuring training time
     start = time.time()
-    #%%time
+
     model = Net().to(device)
-    optimizer = optim.SGD(model.parameters(), lr=args.lr) # TODO momentum is not supported at the moment
+    optimizer = optim.SGD(model.parameters(), lr=args.lr)
 
     for epoch in range(1, args.epochs + 1):
         train(args, model, device, federated_train_loader, optimizer, epoch, clients_mem)
@@ -154,6 +151,7 @@ def experiment(num_workers,no_cuda):
 
     end = time.time()
     print(end - start)
+    # Printing the memory exchanged for each client
     print("Memory exchanged : ",clients_mem)
     return clients_mem
 
