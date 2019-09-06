@@ -53,7 +53,7 @@ def train(args, model, device, federated_train_loader, optimizer, epoch, clients
     model.train()
     #distributed dataset
     for batch_idx, (data, target) in enumerate(federated_train_loader):
-        send the model to the right location
+        #send the model to the right location
         model.send(data.location)
         data, target = data.to(device), target.to(device)
         # associate the worker with the right number
