@@ -53,7 +53,7 @@ pyrsistent==0.14.11
 python-dateutil==2.8.0
 python-engineio==3.9.0
 python-socketio==4.3.0
-PyYAML==5.1.1
+PyYAML==5.4
 pyzmq==18.0.0
 qtconsole==4.5.2
 scikit-learn0.21.3
