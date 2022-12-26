@@ -79,7 +79,7 @@ webencodings==0.5.1
 websocket-client==0.56.0
 websockets==8.0.1
 Werkzeug==0.15.5
-wheel==0.33.4
+wheel==0.38.1
 widgetsnbextension==3.5.0
 wrapt==1.11.2
 zstd==1.4.1.0
