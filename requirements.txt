@@ -59,7 +59,7 @@ qtconsole==4.5.2
 scikit-learn0.21.3
 scipy==1.3.0
 Send2Trash==1.5.0
-setuptools==41.0.1
+setuptools==65.5.1
 six==1.12.0
 syft==0.1.19a1
 tblib==1.4.0
